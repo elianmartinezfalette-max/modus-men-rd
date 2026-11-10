@@ -116,6 +116,7 @@ header.top{
   aspect-ratio:1/1; display:flex; align-items:center; justify-content:center; position:relative;
   overflow:hidden; background:#1a1a1a;
 }
+.card .art{cursor:pointer}
 .card .art img{width:100%; height:100%; object-fit:cover; display:block}
 .card .art::after{
   content:""; position:absolute; inset:0;
@@ -183,6 +184,30 @@ header.top{
 .confirm-link svg{width:16px; height:16px; fill:currentColor}
 .confirm-link.active{background:var(--accent); color:var(--accent-fg); pointer-events:auto; box-shadow:0 10px 22px -8px rgba(201,163,59,.55)}
 .modal .hint{font-size:11px; color:var(--fg-muted); margin-top:10px}
+
+.lb-overlay{position:fixed; inset:0; background:rgba(0,0,0,.85); z-index:60; opacity:0; pointer-events:none; transition:opacity .2s ease}
+.lb-overlay.show{opacity:1; pointer-events:auto}
+.lightbox{
+  position:fixed; inset:0; z-index:61; display:flex; flex-direction:column; align-items:center; justify-content:center;
+  padding:max(16px, env(safe-area-inset-top,0px)) max(16px, env(safe-area-inset-right,0px)) max(16px, env(safe-area-inset-bottom,0px)) max(16px, env(safe-area-inset-left,0px));
+  opacity:0; pointer-events:none; transition:opacity .2s ease;
+}
+.lightbox.show{opacity:1; pointer-events:auto}
+.lightbox img{max-width:min(92vw,480px); max-height:58vh; object-fit:contain; border-radius:14px; background:#1a1a1a; box-shadow:0 30px 70px -16px rgba(0,0,0,.7)}
+.lb-close{
+  position:absolute; top:max(14px, env(safe-area-inset-top,0px)); right:max(14px, env(safe-area-inset-right,0px));
+  width:38px; height:38px; border-radius:50%; background:rgba(255,255,255,.08); border:1px solid rgba(255,255,255,.15);
+  color:var(--fg); font-size:22px; line-height:1; cursor:pointer;
+}
+.lb-foot{margin-top:18px; text-align:center}
+.lb-name{font-size:16px; color:var(--fg)}
+.lb-price{color:var(--accent); font-weight:700; font-size:16px; margin-top:6px}
+.lb-order{
+  margin-top:14px; display:flex; align-items:center; justify-content:center; gap:8px;
+  background:var(--accent); color:var(--accent-fg); border:none; border-radius:10px;
+  padding:12px 22px; font-weight:700; font-size:13px; cursor:pointer;
+}
+.lb-order svg{width:15px; height:15px; fill:currentColor}
 
 .toast{
   position:fixed; left:50%; bottom:22px; transform:translate(-50%,10px);
@@ -261,6 +286,20 @@ header.top{
   <button class="nclose" id="nudgeClose" aria-label="Cerrar">&times;</button>
   <p>¿No encuentras tu talla o estilo? Te asesoramos en el momento.</p>
   <a href="https://api.whatsapp.com/send?phone=18097032886&amp;text=%C2%A1Hola!%20Quisiera%20m%C3%A1s%20informaci%C3%B3n%20%F0%9F%AB%A1%20" target="_blank" rel="noopener">Escribir por WhatsApp →</a>
+</div>
+
+<div class="lb-overlay" id="lbOverlay"></div>
+<div class="lightbox" id="lightbox">
+  <button class="lb-close" id="lbClose" aria-label="Cerrar">&times;</button>
+  <img id="lbImg" src="" alt="">
+  <div class="lb-foot">
+    <div class="lb-name disp" id="lbName"></div>
+    <div class="lb-price num" id="lbPrice"></div>
+    <button class="lb-order" id="lbOrderBtn">
+      <svg viewBox="0 0 24 24"><path d="M12.04 2c-5.5 0-9.96 4.46-9.96 9.96 0 1.76.46 3.45 1.33 4.95L2 22l5.25-1.38a9.9 9.9 0 0 0 4.79 1.22h.01c5.5 0 9.96-4.46 9.96-9.96S17.54 2 12.04 2Z"/></svg>
+      Pedir por WhatsApp
+    </button>
+  </div>
 </div>
 
 <div class="overlay" id="overlay"></div>
@@ -357,7 +396,7 @@ header.top{
   }
 
   function artHtml(p){
-    return '<div class="art"><img src="'+p.img+'" alt="'+p.name+'" loading="lazy"></div>';
+    return '<div class="art" data-pid="'+p.id+'"><img src="'+p.img+'" alt="'+p.name+'" loading="lazy"></div>';
   }
 
   function renderGrid(){
@@ -396,9 +435,16 @@ header.top{
 
   gridEl.addEventListener('click', function(e){
     var btn = e.target.closest('.order-btn');
-    if (!btn) return;
-    var p = PRODUCTS.find(function(x){ return x.id === btn.dataset.pid; });
-    if (p) openModal(p);
+    if (btn){
+      var p = PRODUCTS.find(function(x){ return x.id === btn.dataset.pid; });
+      if (p) openModal(p);
+      return;
+    }
+    var art = e.target.closest('.art');
+    if (art){
+      var p2 = PRODUCTS.find(function(x){ return x.id === art.dataset.pid; });
+      if (p2) openLightbox(p2);
+    }
   });
 
   var overlay = document.getElementById('overlay');
@@ -470,6 +516,41 @@ header.top{
     if (confirmLink.classList.contains('active')){
       showToast('Abriendo WhatsApp…');
       setTimeout(closeModal, 400);
+    }
+  });
+
+  var lbOverlay = document.getElementById('lbOverlay');
+  var lightbox = document.getElementById('lightbox');
+  var lbImg = document.getElementById('lbImg');
+  var lbName = document.getElementById('lbName');
+  var lbPrice = document.getElementById('lbPrice');
+  var lbOrderBtn = document.getElementById('lbOrderBtn');
+  var lbProduct = null;
+
+  function openLightbox(p){
+    lbProduct = p;
+    lbImg.src = p.img;
+    lbImg.alt = p.name;
+    lbName.textContent = p.name;
+    lbPrice.textContent = money(p.price);
+    lbOverlay.classList.add('show');
+    lightbox.classList.add('show');
+  }
+  function closeLightbox(){
+    lbOverlay.classList.remove('show');
+    lightbox.classList.remove('show');
+  }
+  document.getElementById('lbClose').onclick = closeLightbox;
+  lbOverlay.onclick = closeLightbox;
+  lbOrderBtn.onclick = function(){
+    closeLightbox();
+    if (lbProduct) openModal(lbProduct);
+  };
+
+  document.addEventListener('keydown', function(e){
+    if (e.key === 'Escape'){
+      closeLightbox();
+      closeModal();
     }
   });
 
